@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 require('dotenv').config();
 
@@ -43,9 +44,31 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
       return res.status(400).json({ error: 'No dietary preferences provided' });
     }
 
+    // Resize image if needed to stay under Claude API's 5MB limit
+    let imageBuffer = req.file.buffer;
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+
+    if (imageBuffer.length > MAX_SIZE) {
+      console.log(`Image size ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds 5MB limit, resizing...`);
+
+      // Resize image progressively until under 5MB
+      let quality = 85;
+      while (imageBuffer.length > MAX_SIZE && quality > 10) {
+        imageBuffer = await sharp(req.file.buffer)
+          .jpeg({ quality, mozjpeg: true })
+          .toBuffer();
+
+        if (imageBuffer.length > MAX_SIZE) {
+          quality -= 5;
+        }
+      }
+
+      console.log(`Image resized to ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB with quality ${quality}`);
+    }
+
     // Convert image buffer to base64
-    const base64Image = req.file.buffer.toString('base64');
-    const mediaType = req.file.mimetype;
+    const base64Image = imageBuffer.toString('base64');
+    const mediaType = imageBuffer.length !== req.file.buffer.length ? 'image/jpeg' : req.file.mimetype;
 
     // Build learned preferences context
     let learnedContext = '';
