@@ -47,47 +47,65 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
     // Resize image if needed to stay under Claude API's 5MB limit
     let imageBuffer = req.file.buffer;
     const MAX_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+    let wasResized = false;
 
     if (imageBuffer.length > MAX_SIZE) {
       console.log(`Image size ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds 5MB limit, resizing...`);
+      wasResized = true;
 
-      // Get image metadata to determine dimensions
+      // Get image metadata
       const metadata = await sharp(req.file.buffer).metadata();
       const originalWidth = metadata.width;
       const originalHeight = metadata.height;
 
-      // Try quality reduction first (on full-size image)
+      // Strategy: Try quality reduction first, then combine dimension + quality reduction
       let quality = 85;
-      while (imageBuffer.length > MAX_SIZE && quality > 20) {
-        imageBuffer = await sharp(req.file.buffer)
-          .jpeg({ quality, mozjpeg: true })
+      let scale = 1.0;
+
+      // Attempt 1: Quality reduction only (keep full dimensions)
+      for (let q = 85; q >= 20; q -= 5) {
+        const testBuffer = await sharp(req.file.buffer)
+          .jpeg({ quality: q, mozjpeg: true })
           .toBuffer();
 
-        if (imageBuffer.length > MAX_SIZE) {
-          quality -= 5;
+        if (testBuffer.length <= MAX_SIZE) {
+          imageBuffer = testBuffer;
+          quality = q;
+          break;
         }
       }
 
-      // If quality reduction isn't enough, reduce dimensions
-      let scale = 0.9;
-      while (imageBuffer.length > MAX_SIZE && scale > 0.3) {
-        imageBuffer = await sharp(req.file.buffer)
-          .resize(Math.round(originalWidth * scale), Math.round(originalHeight * scale))
-          .jpeg({ quality: 75, mozjpeg: true })
-          .toBuffer();
+      // Attempt 2: If quality reduction alone didn't work, reduce dimensions with good quality
+      if (imageBuffer.length > MAX_SIZE) {
+        for (let s = 0.9; s >= 0.3; s -= 0.1) {
+          const testBuffer = await sharp(req.file.buffer)
+            .resize(Math.round(originalWidth * s), Math.round(originalHeight * s), {
+              fit: 'inside',
+              withoutEnlargement: true
+            })
+            .jpeg({ quality: 75, mozjpeg: true })
+            .toBuffer();
 
-        if (imageBuffer.length > MAX_SIZE) {
-          scale -= 0.1;
+          if (testBuffer.length <= MAX_SIZE) {
+            imageBuffer = testBuffer;
+            scale = s;
+            quality = 75;
+            break;
+          }
         }
       }
 
-      const finalScale = imageBuffer.length > MAX_SIZE ? scale : (quality < 85 ? 1.0 : scale);
-      console.log(`Image resized to ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (quality: ${quality}, scale: ${(finalScale * 100).toFixed(0)}%)`);
+      console.log(`Image resized to ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (quality: ${quality}, scale: ${(scale * 100).toFixed(0)}%)`);
+
+      // Final check - if still too large, throw error
+      if (imageBuffer.length > MAX_SIZE) {
+        throw new Error(`Unable to compress image below 5MB limit. Final size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+      }
     }
 
     // Convert image buffer to base64
     const base64Image = imageBuffer.toString('base64');
-    const mediaType = imageBuffer.length !== req.file.buffer.length ? 'image/jpeg' : req.file.mimetype;
+    const mediaType = wasResized ? 'image/jpeg' : req.file.mimetype;
 
     // Build learned preferences context
     let learnedContext = '';
