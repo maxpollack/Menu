@@ -1,0 +1,30 @@
+{
+  "name": "Diet Menu Analyzer",
+  "description": "AI-powered menu analyzer for dietary preferences",
+  "repository": "https://github.com/your-username/Menu",
+  "keywords": [
+    "ai",
+    "menu",
+    "diet",
+    "nutrition",
+    "anthropic",
+    "vision",
+    "react"
+  ],
+  "image": "heroku/nodejs",
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "env": {
+    "ANTHROPIC_API_KEY": {
+      "description": "Your Anthropic API key from https://console.anthropic.com/",
+      "required": true
+    },
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    }
+  }
+}
