@@ -79,8 +79,9 @@ function App() {
   // Combine default and custom preferences
   const preferenceSuggestions = [...defaultPreferenceSuggestions, ...customPreferences];
 
-  // Client-side image compression to ensure images are under 4.5MB
-  const compressImage = (file, maxSizeMB = 4.5) => {
+  // Client-side image compression to ensure images are under 3.5MB
+  // (3.5MB binary → ~4.7MB base64, safely under Claude's 5MB limit)
+  const compressImage = (file, maxSizeMB = 3.5) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -189,16 +190,19 @@ function App() {
     const file = e.target.files[0];
     if (file) {
       try {
-        const maxSizeMB = 4.5;
+        // Target 3.5MB to account for base64 encoding overhead (~33%)
+        // 3.5MB binary → ~4.7MB base64 (safely under Claude's 5MB limit)
+        const maxSizeMB = 3.5;
         const fileSizeMB = file.size / (1024 * 1024);
         let processedFile = file;
 
-        // Always compress if over 4.5MB
+        // Always compress if over 3.5MB
         if (fileSizeMB > maxSizeMB) {
           setStatusMessage(`Compressing image (${fileSizeMB.toFixed(1)}MB → ${maxSizeMB}MB target)...`);
           processedFile = await compressImage(file, maxSizeMB);
           const newSizeMB = processedFile.size / (1024 * 1024);
           console.log(`Image compressed: ${fileSizeMB.toFixed(1)}MB → ${newSizeMB.toFixed(1)}MB`);
+          console.log(`Estimated base64 size: ~${(newSizeMB * 1.33).toFixed(2)}MB`);
           setStatusMessage(`Image compressed to ${newSizeMB.toFixed(1)}MB`);
           setTimeout(() => setStatusMessage(null), 3000);
         } else {

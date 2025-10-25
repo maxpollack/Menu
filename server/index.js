@@ -44,21 +44,26 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
       return res.status(400).json({ error: 'No dietary preferences provided' });
     }
 
-    // Client-side compression ensures images are already under 4.5MB
+    // Client-side compression targets 3.5MB binary
+    // (becomes ~4.7MB after base64 encoding, under Claude's 5MB limit)
     const imageBuffer = req.file.buffer;
     const imageSizeMB = imageBuffer.length / (1024 * 1024);
 
-    console.log(`[Server] Received image: ${imageSizeMB.toFixed(2)}MB`);
+    console.log(`[Server] Received image: ${imageSizeMB.toFixed(2)}MB (binary)`);
     console.log(`[Server] Image type: ${req.file.mimetype}`);
-
-    // Safety check - should never trigger with proper client-side compression
-    const CLAUDE_LIMIT = 5 * 1024 * 1024; // 5MB hard limit
-    if (imageBuffer.length > CLAUDE_LIMIT) {
-      throw new Error(`Image is ${imageSizeMB.toFixed(2)}MB, exceeds Claude's 5MB limit. Client-side compression failed.`);
-    }
 
     // Convert image buffer to base64
     const base64Image = imageBuffer.toString('base64');
+    const base64SizeMB = base64Image.length / (1024 * 1024);
+
+    console.log(`[Server] Base64 size: ${base64SizeMB.toFixed(2)}MB`);
+
+    // Critical check: base64 size must be under Claude's 5MB limit
+    const CLAUDE_LIMIT_MB = 5;
+    if (base64SizeMB > CLAUDE_LIMIT_MB) {
+      throw new Error(`Base64 image is ${base64SizeMB.toFixed(2)}MB, exceeds Claude's ${CLAUDE_LIMIT_MB}MB limit. Client compression may have failed.`);
+    }
+
     const mediaType = req.file.mimetype;
 
     // Build learned preferences context
@@ -114,7 +119,8 @@ Format your response as JSON with this structure:
 
     // Log image details before sending to Claude
     console.log(`[Claude API] Sending to Claude:`);
-    console.log(`[Claude API]   - Size: ${imageSizeMB.toFixed(2)}MB`);
+    console.log(`[Claude API]   - Binary size: ${imageSizeMB.toFixed(2)}MB`);
+    console.log(`[Claude API]   - Base64 size: ${base64SizeMB.toFixed(2)}MB (limit: 5MB)`);
     console.log(`[Claude API]   - Type: ${mediaType}`);
 
     // Call Claude API with vision
