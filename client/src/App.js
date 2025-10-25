@@ -79,69 +79,101 @@ function App() {
   // Combine default and custom preferences
   const preferenceSuggestions = [...defaultPreferenceSuggestions, ...customPreferences];
 
-  // Resize image if it exceeds 5MB
-  const resizeImage = (file, maxSizeMB = 5) => {
+  // Client-side image compression to ensure images are under 4.5MB
+  const compressImage = (file, maxSizeMB = 4.5) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          // Calculate initial scale based on file size
-          const fileSizeMB = file.size / (1024 * 1024);
-          let scale = 1;
-
-          // Aggressively scale down for large images
-          if (fileSizeMB > 15) {
-            scale = 0.5;
-          } else if (fileSizeMB > 10) {
-            scale = 0.6;
-          } else if (fileSizeMB > 7) {
-            scale = 0.7;
-          } else {
-            scale = 0.85;
-          }
-
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
 
-          // Set canvas size with initial scale
-          canvas.width = Math.floor(img.width * scale);
-          canvas.height = Math.floor(img.height * scale);
+          console.log(`[Compression] Original: ${img.width}x${img.height}`);
 
-          // Draw scaled image
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          // Progressive compression attempts (scale + quality combinations)
+          const compressionAttempts = [
+            { scale: 1.0, quality: 0.85 },
+            { scale: 1.0, quality: 0.75 },
+            { scale: 1.0, quality: 0.65 },
+            { scale: 0.9, quality: 0.75 },
+            { scale: 0.8, quality: 0.75 },
+            { scale: 0.7, quality: 0.70 },
+            { scale: 0.6, quality: 0.65 },
+            { scale: 0.5, quality: 0.60 },
+            { scale: 0.4, quality: 0.55 },
+            { scale: 0.3, quality: 0.50 },
+          ];
 
-          // Try different quality levels until we get under maxSizeMB
-          const tryCompress = (quality) => {
-            canvas.toBlob(
-              (blob) => {
+          let attemptIndex = 0;
+
+          const tryCompress = () => {
+            if (attemptIndex >= compressionAttempts.length) {
+              // Last resort: maximum compression
+              console.log('[Compression] Using maximum compression...');
+              const maxWidth = Math.round(img.width * 0.25);
+              const maxHeight = Math.round(img.height * 0.25);
+
+              canvas.width = maxWidth;
+              canvas.height = maxHeight;
+              ctx.drawImage(img, 0, 0, maxWidth, maxHeight);
+
+              canvas.toBlob((blob) => {
                 if (!blob) {
-                  reject(new Error('Failed to create blob'));
+                  reject(new Error('Failed to compress image'));
                   return;
                 }
 
                 const sizeMB = blob.size / (1024 * 1024);
+                console.log(`[Compression] Max compression: ${sizeMB.toFixed(2)}MB`);
 
-                // If we're under the limit or quality is too low, use this version
-                if (sizeMB <= maxSizeMB || quality <= 0.1) {
-                  const resizedFile = new File([blob], file.name, {
-                    type: 'image/jpeg',
-                    lastModified: Date.now()
-                  });
-                  resolve(resizedFile);
-                } else {
-                  // Try lower quality
-                  tryCompress(quality - 0.1);
+                if (sizeMB > maxSizeMB) {
+                  reject(new Error(`Unable to compress below ${maxSizeMB}MB`));
+                  return;
                 }
-              },
-              'image/jpeg',
-              quality
-            );
+
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve(compressedFile);
+              }, 'image/jpeg', 0.35);
+              return;
+            }
+
+            const attempt = compressionAttempts[attemptIndex];
+            const newWidth = Math.round(img.width * attempt.scale);
+            const newHeight = Math.round(img.height * attempt.scale);
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                reject(new Error('Failed to compress image'));
+                return;
+              }
+
+              const sizeMB = blob.size / (1024 * 1024);
+              console.log(`[Compression] Attempt ${attemptIndex + 1}: ${(attempt.scale * 100).toFixed(0)}% scale, ${(attempt.quality * 100).toFixed(0)}% quality → ${sizeMB.toFixed(2)}MB`);
+
+              if (sizeMB <= maxSizeMB) {
+                console.log(`[Compression] ✓ Success: ${sizeMB.toFixed(2)}MB`);
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve(compressedFile);
+              } else {
+                attemptIndex++;
+                tryCompress();
+              }
+            }, 'image/jpeg', attempt.quality);
           };
 
-          // Start with quality 0.85 for good balance
-          tryCompress(0.85);
+          tryCompress();
         };
 
         img.onerror = () => reject(new Error('Failed to load image'));
@@ -157,19 +189,20 @@ function App() {
     const file = e.target.files[0];
     if (file) {
       try {
-        const maxSizeMB = 5;
+        const maxSizeMB = 4.5;
         const fileSizeMB = file.size / (1024 * 1024);
-
         let processedFile = file;
 
-        // Resize if over 5MB
+        // Always compress if over 4.5MB
         if (fileSizeMB > maxSizeMB) {
-          setStatusMessage(`Resizing image (${fileSizeMB.toFixed(1)}MB → ${maxSizeMB}MB)...`);
-          processedFile = await resizeImage(file, maxSizeMB);
+          setStatusMessage(`Compressing image (${fileSizeMB.toFixed(1)}MB → ${maxSizeMB}MB target)...`);
+          processedFile = await compressImage(file, maxSizeMB);
           const newSizeMB = processedFile.size / (1024 * 1024);
-          console.log(`Image resized from ${fileSizeMB.toFixed(1)}MB to ${newSizeMB.toFixed(1)}MB`);
-          setStatusMessage(`Image resized to ${newSizeMB.toFixed(1)}MB`);
+          console.log(`Image compressed: ${fileSizeMB.toFixed(1)}MB → ${newSizeMB.toFixed(1)}MB`);
+          setStatusMessage(`Image compressed to ${newSizeMB.toFixed(1)}MB`);
           setTimeout(() => setStatusMessage(null), 3000);
+        } else {
+          console.log(`Image size OK: ${fileSizeMB.toFixed(2)}MB`);
         }
 
         setMenuImage(processedFile);
