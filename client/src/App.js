@@ -12,6 +12,13 @@ function App() {
   const [newPreference, setNewPreference] = useState('');
   const [likedItems, setLikedItems] = useState([]);
   const [dislikedItems, setDislikedItems] = useState([]);
+  const [expandedSections, setExpandedSections] = useState({
+    menuSections: false,
+    recommendations: false,
+    suitable: false,
+    neutral: false,
+    unsuitable: false
+  });
 
   // Common dietary preference suggestions
   const defaultPreferenceSuggestions = [
@@ -213,6 +220,13 @@ function App() {
     }
   };
 
+  const toggleSection = (sectionName) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
   const renderStars = (rating) => {
     const stars = [];
     for (let i = 1; i <= 5; i++) {
@@ -410,42 +424,61 @@ function App() {
 
             {/* Menu Sections Highlight */}
             {analysis.menuSections && analysis.menuSections.length > 0 && (
-              <div className="menu-sections">
-                <h2>Menu Sections Analysis</h2>
-                {analysis.menuSections.map((section, index) => (
-                  <div key={index} className="section-card">
-                    <div className="section-header">
-                      <h3>{section.section}</h3>
-                      {renderStars(section.compatibility)}
-                    </div>
-                    <p>{section.description}</p>
+              <div className="menu-sections collapsible-section">
+                <h2 className="section-title-collapsible" onClick={() => toggleSection('menuSections')}>
+                  <span className="collapse-icon">{expandedSections.menuSections ? '▼' : '▶'}</span>
+                  Menu Sections Analysis
+                </h2>
+                {expandedSections.menuSections && (
+                  <div className="section-content">
+                    {analysis.menuSections.map((section, index) => (
+                      <div key={index} className="section-card">
+                        <div className="section-header">
+                          <h3>{section.section}</h3>
+                          {renderStars(section.compatibility)}
+                        </div>
+                        <p>{section.description}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
 
             {/* Recommendations */}
             {analysis.recommendations && analysis.recommendations.length > 0 && (
-              <div className="recommendations">
-                <h2>Top Recommendations</h2>
-                {analysis.recommendations.map((rec, index) => (
-                  <div key={index} className="recommendation-card">
-                    <div className="rec-number">{index + 1}</div>
-                    <div className="rec-content">
-                      <h3>{rec.name}</h3>
-                      {rec.rating && renderStars(rec.rating)}
-                      <p>{rec.reason}</p>
-                    </div>
+              <div className="recommendations collapsible-section">
+                <h2 className="section-title-collapsible" onClick={() => toggleSection('recommendations')}>
+                  <span className="collapse-icon">{expandedSections.recommendations ? '▼' : '▶'}</span>
+                  Top Recommendations
+                </h2>
+                {expandedSections.recommendations && (
+                  <div className="section-content">
+                    {analysis.recommendations.map((rec, index) => (
+                      <div key={index} className="recommendation-card">
+                        <div className="rec-number">{index + 1}</div>
+                        <div className="rec-content">
+                          <h3>{rec.name}</h3>
+                          {rec.rating && renderStars(rec.rating)}
+                          <p>{rec.reason}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
 
             {/* Suitable Items */}
             {analysis.suitableItems && analysis.suitableItems.length > 0 && (
-              <div className="items-section suitable">
-                <h2>Good Choices for You</h2>
-                {analysis.suitableItems.map((item, index) => (
+              <div className="items-section suitable collapsible-section">
+                <h2 className="section-title-collapsible" onClick={() => toggleSection('suitable')}>
+                  <span className="collapse-icon">{expandedSections.suitable ? '▼' : '▶'}</span>
+                  Good Choices for You
+                </h2>
+                {expandedSections.suitable && (
+                  <div className="section-content">
+                    {analysis.suitableItems.map((item, index) => (
                   <div key={index} className="item-card green">
                     <div className="item-indicator">✓</div>
                     <div className="item-content">
@@ -475,15 +508,22 @@ function App() {
                       </div>
                     </div>
                   </div>
-                ))}
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Neutral Items */}
             {analysis.neutralItems && analysis.neutralItems.length > 0 && (
-              <div className="items-section neutral">
-                <h2>Acceptable Options</h2>
-                {analysis.neutralItems.map((item, index) => (
+              <div className="items-section neutral collapsible-section">
+                <h2 className="section-title-collapsible" onClick={() => toggleSection('neutral')}>
+                  <span className="collapse-icon">{expandedSections.neutral ? '▼' : '▶'}</span>
+                  Acceptable Options
+                </h2>
+                {expandedSections.neutral && (
+                  <div className="section-content">
+                    {analysis.neutralItems.map((item, index) => (
                   <div key={index} className="item-card yellow">
                     <div className="item-indicator">~</div>
                     <div className="item-content">
@@ -513,15 +553,22 @@ function App() {
                       </div>
                     </div>
                   </div>
-                ))}
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Unsuitable Items */}
             {analysis.unsuitableItems && analysis.unsuitableItems.length > 0 && (
-              <div className="items-section unsuitable">
-                <h2>Items to Avoid</h2>
-                {analysis.unsuitableItems.map((item, index) => (
+              <div className="items-section unsuitable collapsible-section">
+                <h2 className="section-title-collapsible" onClick={() => toggleSection('unsuitable')}>
+                  <span className="collapse-icon">{expandedSections.unsuitable ? '▼' : '▶'}</span>
+                  Items to Avoid
+                </h2>
+                {expandedSections.unsuitable && (
+                  <div className="section-content">
+                    {analysis.unsuitableItems.map((item, index) => (
                   <div key={index} className="item-card red">
                     <div className="item-indicator">✗</div>
                     <div className="item-content">
@@ -551,7 +598,9 @@ function App() {
                       </div>
                     </div>
                   </div>
-                ))}
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
