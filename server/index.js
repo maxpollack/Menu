@@ -45,11 +45,13 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
     }
 
     // Resize image if needed to stay under Claude API's 5MB limit
+    // Target 4.8MB to have a safety margin (Claude limit is 5MB exactly)
     let imageBuffer = req.file.buffer;
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+    const MAX_SIZE = 4.8 * 1024 * 1024; // 4.8MB target (safety margin)
+    const CLAUDE_LIMIT = 5 * 1024 * 1024; // 5MB hard limit
     let wasResized = false;
 
-    console.log(`[Image Processing] Original image size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+    console.log(`[Image Processing] Original image size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (${imageBuffer.length} bytes)`);
 
     if (imageBuffer.length > MAX_SIZE) {
       console.log(`[Image Processing] Image exceeds 5MB limit, starting compression...`);
@@ -65,17 +67,18 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
         let finalQuality = 80;
         let finalScale = 1.0;
 
-        // Try progressively smaller sizes until we get under 5MB
+        // Try progressively smaller sizes until we get under 4.8MB
         const attempts = [
-          { scale: 1.0, quality: 80 },
-          { scale: 1.0, quality: 70 },
-          { scale: 1.0, quality: 60 },
-          { scale: 0.9, quality: 70 },
-          { scale: 0.8, quality: 70 },
-          { scale: 0.7, quality: 70 },
+          { scale: 1.0, quality: 75 },
+          { scale: 1.0, quality: 65 },
+          { scale: 1.0, quality: 55 },
+          { scale: 0.9, quality: 65 },
+          { scale: 0.8, quality: 65 },
+          { scale: 0.7, quality: 65 },
           { scale: 0.6, quality: 60 },
-          { scale: 0.5, quality: 60 },
+          { scale: 0.5, quality: 55 },
           { scale: 0.4, quality: 50 },
+          { scale: 0.3, quality: 45 },
         ];
 
         for (const attempt of attempts) {
@@ -109,27 +112,33 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
           // Last resort: very aggressive compression
           console.log(`[Image Processing] Standard attempts failed, using maximum compression...`);
           imageBuffer = await sharp(req.file.buffer)
-            .resize(Math.round(metadata.width * 0.3), Math.round(metadata.height * 0.3), {
+            .resize(Math.round(metadata.width * 0.25), Math.round(metadata.height * 0.25), {
               fit: 'inside'
             })
-            .jpeg({ quality: 40, mozjpeg: true })
+            .jpeg({ quality: 35, mozjpeg: true })
             .toBuffer();
 
           const finalSizeMB = imageBuffer.length / 1024 / 1024;
-          console.log(`[Image Processing] Maximum compression result: ${finalSizeMB.toFixed(2)}MB`);
+          console.log(`[Image Processing] Maximum compression result: ${finalSizeMB.toFixed(2)}MB (${imageBuffer.length} bytes)`);
 
           if (imageBuffer.length > MAX_SIZE) {
-            throw new Error(`Unable to compress image below 5MB even with maximum compression. Final size: ${finalSizeMB.toFixed(2)}MB`);
+            throw new Error(`Unable to compress image below 4.8MB even with maximum compression. Final size: ${finalSizeMB.toFixed(2)}MB`);
           }
         }
 
-        console.log(`[Image Processing] Final image: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+        console.log(`[Image Processing] Final image: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (${imageBuffer.length} bytes)`);
+
+        // CRITICAL: Final safety check before sending to Claude
+        if (imageBuffer.length > CLAUDE_LIMIT) {
+          throw new Error(`CRITICAL: Image is still ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB after compression, exceeds Claude's 5MB limit!`);
+        }
+
       } catch (error) {
         console.error(`[Image Processing] Error during compression:`, error);
         throw error;
       }
     } else {
-      console.log(`[Image Processing] Image is under 5MB, no resizing needed`);
+      console.log(`[Image Processing] Image is under 4.8MB, no resizing needed`);
     }
 
     // Convert image buffer to base64
@@ -186,6 +195,13 @@ Format your response as JSON with this structure:
     {"section": "Appetizers", "compatibility": 4, "description": "Most options are suitable"}
   ]
 }`;
+
+    // CRITICAL: Log final image details before sending to Claude
+    console.log(`[Claude API] Sending image to Claude API:`);
+    console.log(`[Claude API]   - Size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (${imageBuffer.length} bytes)`);
+    console.log(`[Claude API]   - Media type: ${mediaType}`);
+    console.log(`[Claude API]   - Was resized: ${wasResized}`);
+    console.log(`[Claude API]   - Base64 length: ${base64Image.length} characters`);
 
     // Call Claude API with vision
     const message = await anthropic.messages.create({
