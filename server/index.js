@@ -59,30 +59,25 @@ Please provide:
    - 2 stars: Poor match, conflicts with some preferences
    - 1 star: Very poor match, should avoid
 
-3. For positioning on the image, estimate the approximate location as percentages:
-   - x: horizontal position from left (0-100%)
-   - y: vertical position from top (0-100%)
-   - width: approximate width of the item text (5-30%)
-   - height: approximate height (2-8%)
-   Example: {"x": 25, "y": 30, "width": 20, "height": 5} means item is 25% from left, 30% from top
+3. For each item, provide a simple location description (e.g., "Top of menu", "Middle section", "Bottom right", "Under Appetizers section")
 
 4. Classify items as:
-   - "suitable" (4-5 stars) - will be highlighted in green
-   - "neutral" (3 stars) - will be highlighted in yellow
-   - "unsuitable" (1-2 stars) - will be highlighted in red
+   - "suitable" (4-5 stars)
+   - "neutral" (3 stars)
+   - "unsuitable" (1-2 stars)
 
 Format your response as JSON with this structure:
 {
   "summary": "Brief 2-3 sentence analysis of the menu compatibility",
   "overallCompatibility": 3.5,
   "suitableItems": [
-    {"name": "item name", "rating": 5, "reason": "why it's suitable", "position": {"x": 25, "y": 30, "width": 20, "height": 5}}
+    {"name": "item name", "rating": 5, "reason": "why it's suitable", "location": "where it appears on the menu"}
   ],
   "neutralItems": [
-    {"name": "item name", "rating": 3, "reason": "why it's neutral", "position": {"x": 25, "y": 45, "width": 20, "height": 5}}
+    {"name": "item name", "rating": 3, "reason": "why it's neutral", "location": "where it appears on the menu"}
   ],
   "unsuitableItems": [
-    {"name": "item name", "rating": 1, "reason": "why it's unsuitable", "position": {"x": 25, "y": 60, "width": 20, "height": 5}}
+    {"name": "item name", "rating": 1, "reason": "why it's unsuitable", "location": "where it appears on the menu"}
   ],
   "recommendations": [
     {"name": "item name", "rating": 5, "reason": "why recommended"}

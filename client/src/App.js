@@ -167,52 +167,29 @@ function App() {
   };
 
   const renderAnnotatedMenu = () => {
-    if (!imagePreview || !analysis) return null;
-
-    const allItems = [
-      ...(analysis.suitableItems || []).map(item => ({ ...item, color: '#10b981', type: 'suitable' })),
-      ...(analysis.neutralItems || []).map(item => ({ ...item, color: '#f59e0b', type: 'neutral' })),
-      ...(analysis.unsuitableItems || []).map(item => ({ ...item, color: '#ef4444', type: 'unsuitable' }))
-    ];
+    if (!imagePreview) return null;
 
     return (
       <div className="annotated-menu-container">
+        <h3>Your Menu</h3>
         <div className="annotated-menu-wrapper">
-          <img src={imagePreview} alt="Menu with highlights" className="menu-base-image" />
-          <div className="menu-overlays">
-            {allItems.map((item, index) => {
-              if (!item.position) return null;
-
-              const { x, y, width, height } = item.position;
-
-              return (
-                <div
-                  key={index}
-                  className={`menu-highlight ${item.type}`}
-                  style={{
-                    left: `${x}%`,
-                    top: `${y}%`,
-                    width: `${width}%`,
-                    height: `${height}%`
-                  }}
-                  title={`${item.name} - ${item.rating} stars`}
-                />
-              );
-            })}
-          </div>
+          <img src={imagePreview} alt="Analyzed menu" className="menu-base-image" />
         </div>
         <div className="highlight-legend">
-          <div className="legend-item">
-            <span className="legend-color green"></span>
-            <span>Good Choices (4-5★)</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-color yellow"></span>
-            <span>Acceptable (3★)</span>
-          </div>
-          <div className="legend-item">
-            <span className="legend-color red"></span>
-            <span>Avoid (1-2★)</span>
+          <p className="legend-title">Color Guide:</p>
+          <div className="legend-items">
+            <div className="legend-item">
+              <span className="legend-color green"></span>
+              <span>Good Choices (4-5★)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-color yellow"></span>
+              <span>Acceptable (3★)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-color red"></span>
+              <span>Avoid (1-2★)</span>
+            </div>
           </div>
         </div>
       </div>
