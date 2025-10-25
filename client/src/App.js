@@ -5,12 +5,13 @@ function App() {
   const [selectedPreferences, setSelectedPreferences] = useState([]);
   const [menuImage, setMenuImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [highlightedImage, setHighlightedImage] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [customPreferences, setCustomPreferences] = useState([]);
   const [newPreference, setNewPreference] = useState('');
+  const [likedItems, setLikedItems] = useState([]);
+  const [dislikedItems, setDislikedItems] = useState([]);
 
   // Common dietary preference suggestions
   const defaultPreferenceSuggestions = [
@@ -26,16 +27,24 @@ function App() {
     'Shellfish-free'
   ];
 
-  // Load selected preferences and custom preferences from localStorage on mount
+  // Load all saved data from localStorage on mount
   useEffect(() => {
     const savedPreferences = localStorage.getItem('selectedPreferences');
     const savedCustomPreferences = localStorage.getItem('customPreferences');
+    const savedLikedItems = localStorage.getItem('likedItems');
+    const savedDislikedItems = localStorage.getItem('dislikedItems');
 
     if (savedPreferences) {
       setSelectedPreferences(JSON.parse(savedPreferences));
     }
     if (savedCustomPreferences) {
       setCustomPreferences(JSON.parse(savedCustomPreferences));
+    }
+    if (savedLikedItems) {
+      setLikedItems(JSON.parse(savedLikedItems));
+    }
+    if (savedDislikedItems) {
+      setDislikedItems(JSON.parse(savedDislikedItems));
     }
   }, []);
 
@@ -48,6 +57,16 @@ function App() {
   useEffect(() => {
     localStorage.setItem('customPreferences', JSON.stringify(customPreferences));
   }, [customPreferences]);
+
+  // Save liked items to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('likedItems', JSON.stringify(likedItems));
+  }, [likedItems]);
+
+  // Save disliked items to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('dislikedItems', JSON.stringify(dislikedItems));
+  }, [dislikedItems]);
 
   // Combine default and custom preferences
   const preferenceSuggestions = [...defaultPreferenceSuggestions, ...customPreferences];
@@ -102,6 +121,14 @@ function App() {
       formData.append('menu', menuImage);
       formData.append('dietaryPreferences', selectedPreferences.join(', '));
 
+      // Include learned preferences if they exist
+      if (likedItems.length > 0) {
+        formData.append('likedItems', likedItems.join(', '));
+      }
+      if (dislikedItems.length > 0) {
+        formData.append('dislikedItems', dislikedItems.join(', '));
+      }
+
       const apiUrl = process.env.NODE_ENV === 'production'
         ? '/api/analyze-menu'
         : 'http://localhost:5000/api/analyze-menu';
@@ -118,9 +145,6 @@ function App() {
 
       const data = await response.json();
       setAnalysis(data.analysis);
-      if (data.highlightedImage) {
-        setHighlightedImage(data.highlightedImage);
-      }
     } catch (err) {
       setError(err.message || 'Failed to analyze menu. Please try again.');
       console.error('Error:', err);
@@ -130,10 +154,9 @@ function App() {
   };
 
   const reset = () => {
-    // Keep dietary preferences saved
+    // Keep dietary preferences and learned preferences saved
     setMenuImage(null);
     setImagePreview(null);
-    setHighlightedImage(null);
     setAnalysis(null);
     setError(null);
   };
@@ -141,6 +164,13 @@ function App() {
   const clearPreferences = () => {
     setSelectedPreferences([]);
     localStorage.removeItem('selectedPreferences');
+  };
+
+  const clearLearnedPreferences = () => {
+    setLikedItems([]);
+    setDislikedItems([]);
+    localStorage.removeItem('likedItems');
+    localStorage.removeItem('dislikedItems');
   };
 
   const addCustomPreference = () => {
@@ -159,6 +189,30 @@ function App() {
     setSelectedPreferences(selectedPreferences.filter(p => p !== pref));
   };
 
+  const handleThumbsUp = (itemName) => {
+    // Remove from disliked if it's there
+    setDislikedItems(dislikedItems.filter(item => item !== itemName));
+
+    // Toggle in liked
+    if (likedItems.includes(itemName)) {
+      setLikedItems(likedItems.filter(item => item !== itemName));
+    } else {
+      setLikedItems([...likedItems, itemName]);
+    }
+  };
+
+  const handleThumbsDown = (itemName) => {
+    // Remove from liked if it's there
+    setLikedItems(likedItems.filter(item => item !== itemName));
+
+    // Toggle in disliked
+    if (dislikedItems.includes(itemName)) {
+      setDislikedItems(dislikedItems.filter(item => item !== itemName));
+    } else {
+      setDislikedItems([...dislikedItems, itemName]);
+    }
+  };
+
   const renderStars = (rating) => {
     const stars = [];
     for (let i = 1; i <= 5; i++) {
@@ -171,33 +225,14 @@ function App() {
     return <div className="star-rating">{stars}</div>;
   };
 
-  const renderAnnotatedMenu = () => {
-    // Use highlighted image if available, otherwise fall back to original
-    const displayImage = highlightedImage || imagePreview;
-    if (!displayImage) return null;
+  const renderMenuImage = () => {
+    if (!imagePreview) return null;
 
     return (
-      <div className="annotated-menu-container">
-        <h3>Your Menu {highlightedImage && '(Highlighted)'}</h3>
-        <div className="annotated-menu-wrapper">
-          <img src={displayImage} alt="Analyzed menu" className="menu-base-image" />
-        </div>
-        <div className="highlight-legend">
-          <p className="legend-title">Color Guide:</p>
-          <div className="legend-items">
-            <div className="legend-item">
-              <span className="legend-color green"></span>
-              <span>Good Choices (4-5★)</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-color yellow"></span>
-              <span>Acceptable (3★)</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-color red"></span>
-              <span>Avoid (1-2★)</span>
-            </div>
-          </div>
+      <div className="menu-image-container">
+        <h3>Your Menu</h3>
+        <div className="menu-wrapper">
+          <img src={imagePreview} alt="Menu" className="menu-image" />
         </div>
       </div>
     );
@@ -276,6 +311,28 @@ function App() {
               </div>
             </div>
 
+            {/* Learned Preferences Section */}
+            {(likedItems.length > 0 || dislikedItems.length > 0) && (
+              <div className="form-group">
+                <div className="label-with-clear">
+                  <label>
+                    Learned Preferences ({likedItems.length} liked, {dislikedItems.length} disliked)
+                  </label>
+                  <button
+                    type="button"
+                    className="clear-prefs-button"
+                    onClick={clearLearnedPreferences}
+                    title="Clear learned preferences"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '0.5rem' }}>
+                  Your thumbs up/down feedback helps personalize future recommendations
+                </p>
+              </div>
+            )}
+
             {/* Image Upload Section */}
             <div className="form-group">
               <label htmlFor="menu-upload">
@@ -348,8 +405,8 @@ function App() {
               </div>
             )}
 
-            {/* Display annotated menu with highlights */}
-            {renderAnnotatedMenu()}
+            {/* Display menu image */}
+            {renderMenuImage()}
 
             {/* Menu Sections Highlight */}
             {analysis.menuSections && analysis.menuSections.length > 0 && (
@@ -400,6 +457,22 @@ function App() {
                       {item.location && (
                         <span className="item-location">{item.location}</span>
                       )}
+                      <div className="feedback-buttons">
+                        <button
+                          className={`thumb-button ${likedItems.includes(item.name) ? 'active' : ''}`}
+                          onClick={() => handleThumbsUp(item.name)}
+                          title="I like this"
+                        >
+                          👍
+                        </button>
+                        <button
+                          className={`thumb-button ${dislikedItems.includes(item.name) ? 'active' : ''}`}
+                          onClick={() => handleThumbsDown(item.name)}
+                          title="I don't like this"
+                        >
+                          👎
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -422,6 +495,22 @@ function App() {
                       {item.location && (
                         <span className="item-location">{item.location}</span>
                       )}
+                      <div className="feedback-buttons">
+                        <button
+                          className={`thumb-button ${likedItems.includes(item.name) ? 'active' : ''}`}
+                          onClick={() => handleThumbsUp(item.name)}
+                          title="I like this"
+                        >
+                          👍
+                        </button>
+                        <button
+                          className={`thumb-button ${dislikedItems.includes(item.name) ? 'active' : ''}`}
+                          onClick={() => handleThumbsDown(item.name)}
+                          title="I don't like this"
+                        >
+                          👎
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -444,6 +533,22 @@ function App() {
                       {item.location && (
                         <span className="item-location">{item.location}</span>
                       )}
+                      <div className="feedback-buttons">
+                        <button
+                          className={`thumb-button ${likedItems.includes(item.name) ? 'active' : ''}`}
+                          onClick={() => handleThumbsUp(item.name)}
+                          title="I like this"
+                        >
+                          👍
+                        </button>
+                        <button
+                          className={`thumb-button ${dislikedItems.includes(item.name) ? 'active' : ''}`}
+                          onClick={() => handleThumbsDown(item.name)}
+                          title="I don't like this"
+                        >
+                          👎
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

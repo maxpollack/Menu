@@ -392,6 +392,30 @@
 
 /* Results Section */
 
+/* Menu Image Display */
+.menu-image-container {
+  margin-bottom: 2rem;
+}
+
+.menu-image-container h3 {
+  color: #333;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+
+.menu-wrapper {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.menu-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 /* Annotated Menu */
 .annotated-menu-container {
   margin-bottom: 2rem;
@@ -621,6 +645,42 @@
   font-size: 0.85rem;
   color: #999;
   font-style: italic;
+}
+
+/* Feedback buttons (thumbs up/down) */
+.feedback-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.thumb-button {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+}
+
+.thumb-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.thumb-button:active {
+  transform: translateY(0);
+}
+
+.thumb-button.active {
+  border-color: #667eea;
+  background: #f0f4ff;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
 }
 
 .raw-response {
