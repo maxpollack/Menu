@@ -8,24 +8,11 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  // Load dietary preferences from localStorage on mount
-  useEffect(() => {
-    const savedPreferences = localStorage.getItem('dietaryPreferences');
-    if (savedPreferences) {
-      setDietaryPreferences(savedPreferences);
-    }
-  }, []);
-
-  // Save dietary preferences to localStorage whenever they change
-  useEffect(() => {
-    if (dietaryPreferences) {
-      localStorage.setItem('dietaryPreferences', dietaryPreferences);
-    }
-  }, [dietaryPreferences]);
+  const [customPreferences, setCustomPreferences] = useState([]);
+  const [newPreference, setNewPreference] = useState('');
 
   // Common dietary preference suggestions
-  const preferenceSuggestions = [
+  const defaultPreferenceSuggestions = [
     'Vegetarian',
     'Vegan',
     'Gluten-free',
@@ -37,6 +24,34 @@ function App() {
     'Nut-free',
     'Shellfish-free'
   ];
+
+  // Load dietary preferences and custom preferences from localStorage on mount
+  useEffect(() => {
+    const savedPreferences = localStorage.getItem('dietaryPreferences');
+    const savedCustomPreferences = localStorage.getItem('customPreferences');
+
+    if (savedPreferences) {
+      setDietaryPreferences(savedPreferences);
+    }
+    if (savedCustomPreferences) {
+      setCustomPreferences(JSON.parse(savedCustomPreferences));
+    }
+  }, []);
+
+  // Save dietary preferences to localStorage whenever they change
+  useEffect(() => {
+    if (dietaryPreferences) {
+      localStorage.setItem('dietaryPreferences', dietaryPreferences);
+    }
+  }, [dietaryPreferences]);
+
+  // Save custom preferences to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('customPreferences', JSON.stringify(customPreferences));
+  }, [customPreferences]);
+
+  // Combine default and custom preferences
+  const preferenceSuggestions = [...defaultPreferenceSuggestions, ...customPreferences];
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -134,6 +149,41 @@ function App() {
     localStorage.removeItem('dietaryPreferences');
   };
 
+  const addCustomPreference = () => {
+    const trimmed = newPreference.trim();
+    if (trimmed && !preferenceSuggestions.includes(trimmed)) {
+      setCustomPreferences([...customPreferences, trimmed]);
+      setNewPreference('');
+      // Also add to active preferences
+      const current = dietaryPreferences.trim();
+      setDietaryPreferences(current ? `${current}, ${trimmed}` : trimmed);
+    }
+  };
+
+  const removeCustomPreference = (pref) => {
+    setCustomPreferences(customPreferences.filter(p => p !== pref));
+    // Also remove from active preferences
+    setDietaryPreferences(
+      dietaryPreferences
+        .split(',')
+        .map(p => p.trim())
+        .filter(p => p !== pref)
+        .join(', ')
+    );
+  };
+
+  const renderStars = (rating) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <span key={i} className={`star ${i <= rating ? 'filled' : ''}`}>
+          ★
+        </span>
+      );
+    }
+    return <div className="star-rating">{stars}</div>;
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -170,16 +220,47 @@ function App() {
               />
 
               <div className="preference-chips">
-                {preferenceSuggestions.map((pref) => (
-                  <button
-                    key={pref}
-                    type="button"
-                    className={`chip ${dietaryPreferences.includes(pref) ? 'active' : ''}`}
-                    onClick={() => handlePreferenceClick(pref)}
-                  >
-                    {pref}
-                  </button>
-                ))}
+                {preferenceSuggestions.map((pref) => {
+                  const isCustom = customPreferences.includes(pref);
+                  return (
+                    <button
+                      key={pref}
+                      type="button"
+                      className={`chip ${dietaryPreferences.includes(pref) ? 'active' : ''} ${isCustom ? 'custom' : ''}`}
+                      onClick={() => handlePreferenceClick(pref)}
+                    >
+                      {pref}
+                      {isCustom && (
+                        <span
+                          className="remove-chip"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeCustomPreference(pref);
+                          }}
+                        >
+                          ×
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="add-custom-pref">
+                <input
+                  type="text"
+                  placeholder="Add custom preference..."
+                  value={newPreference}
+                  onChange={(e) => setNewPreference(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addCustomPreference()}
+                />
+                <button
+                  type="button"
+                  onClick={addCustomPreference}
+                  disabled={!newPreference.trim()}
+                >
+                  Add
+                </button>
               </div>
             </div>
 
@@ -219,11 +300,38 @@ function App() {
           </div>
         ) : (
           <div className="results-section">
+            {/* Overall Compatibility Score */}
+            {analysis.overallCompatibility && (
+              <div className="overall-compatibility">
+                <h2>Overall Menu Compatibility</h2>
+                <div className="compatibility-score">
+                  {renderStars(Math.round(analysis.overallCompatibility))}
+                  <span className="score-text">{analysis.overallCompatibility.toFixed(1)} / 5.0</span>
+                </div>
+              </div>
+            )}
+
             {/* Display uploaded image */}
             {imagePreview && (
               <div className="uploaded-menu">
                 <h3>Your Menu</h3>
                 <img src={imagePreview} alt="Uploaded menu" />
+              </div>
+            )}
+
+            {/* Menu Sections Highlight */}
+            {analysis.menuSections && analysis.menuSections.length > 0 && (
+              <div className="menu-sections">
+                <h2>Menu Sections Analysis</h2>
+                {analysis.menuSections.map((section, index) => (
+                  <div key={index} className="section-card">
+                    <div className="section-header">
+                      <h3>{section.section}</h3>
+                      {renderStars(section.compatibility)}
+                    </div>
+                    <p>{section.description}</p>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -236,6 +344,7 @@ function App() {
                     <div className="rec-number">{index + 1}</div>
                     <div className="rec-content">
                       <h3>{rec.name}</h3>
+                      {rec.rating && renderStars(rec.rating)}
                       <p>{rec.reason}</p>
                     </div>
                   </div>
@@ -251,7 +360,32 @@ function App() {
                   <div key={index} className="item-card green">
                     <div className="item-indicator">✓</div>
                     <div className="item-content">
-                      <h3>{item.name}</h3>
+                      <div className="item-header">
+                        <h3>{item.name}</h3>
+                        {item.rating && renderStars(item.rating)}
+                      </div>
+                      <p>{item.reason}</p>
+                      {item.location && (
+                        <span className="item-location">{item.location}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Neutral Items */}
+            {analysis.neutralItems && analysis.neutralItems.length > 0 && (
+              <div className="items-section neutral">
+                <h2>Acceptable Options</h2>
+                {analysis.neutralItems.map((item, index) => (
+                  <div key={index} className="item-card yellow">
+                    <div className="item-indicator">~</div>
+                    <div className="item-content">
+                      <div className="item-header">
+                        <h3>{item.name}</h3>
+                        {item.rating && renderStars(item.rating)}
+                      </div>
                       <p>{item.reason}</p>
                       {item.location && (
                         <span className="item-location">{item.location}</span>
@@ -270,7 +404,10 @@ function App() {
                   <div key={index} className="item-card red">
                     <div className="item-indicator">✗</div>
                     <div className="item-content">
-                      <h3>{item.name}</h3>
+                      <div className="item-header">
+                        <h3>{item.name}</h3>
+                        {item.rating && renderStars(item.rating)}
+                      </div>
                       <p>{item.reason}</p>
                       {item.location && (
                         <span className="item-location">{item.location}</span>

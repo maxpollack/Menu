@@ -50,28 +50,45 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
     // Create prompt for Claude
     const prompt = `Analyze this restaurant menu image based on the following dietary preferences: ${dietaryPreferences}
 
-Please provide:
-1. A list of menu items that MATCH the dietary preferences (things the person WOULD like to eat) - mark these as "suitable"
-2. A list of menu items that DO NOT MATCH the preferences (things to avoid) - mark these as "unsuitable"
-3. Your top 3 recommendations from the suitable items with brief explanations
+For each menu item you can identify:
+1. Rate how compatible it is with the dietary preferences on a scale of 1-5 stars:
+   - 5 stars: Perfect match, highly recommended
+   - 4 stars: Good match, recommended with minor considerations
+   - 3 stars: Moderate match, acceptable but not ideal
+   - 2 stars: Poor match, conflicts with some preferences
+   - 1 star: Very poor match, should avoid
+
+2. Provide the approximate location/position on the menu (e.g., "top-left section", "middle-right", "bottom section")
+
+3. Classify items as:
+   - "suitable" (4-5 stars)
+   - "neutral" (3 stars)
+   - "unsuitable" (1-2 stars)
 
 Format your response as JSON with this structure:
 {
+  "overallCompatibility": 3.5,
   "suitableItems": [
-    {"name": "item name", "reason": "why it's suitable", "location": "approximate location on menu"}
+    {"name": "item name", "rating": 5, "reason": "why it's suitable", "location": "position on menu"}
+  ],
+  "neutralItems": [
+    {"name": "item name", "rating": 3, "reason": "why it's neutral", "location": "position on menu"}
   ],
   "unsuitableItems": [
-    {"name": "item name", "reason": "why it's unsuitable", "location": "approximate location on menu"}
+    {"name": "item name", "rating": 1, "reason": "why it's unsuitable", "location": "position on menu"}
   ],
   "recommendations": [
-    {"name": "item name", "reason": "why recommended"}
+    {"name": "item name", "rating": 5, "reason": "why recommended"}
+  ],
+  "menuSections": [
+    {"section": "Appetizers", "compatibility": 4, "description": "Most options are suitable"}
   ]
 }`;
 
     // Call Claude API with vision
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
+      max_tokens: 4096,
       messages: [
         {
           role: 'user',
