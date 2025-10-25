@@ -67,9 +67,11 @@ Please provide:
 
 3. For each item, estimate a bounding box where the item name appears on the menu:
    - Provide coordinates as percentages of image dimensions (0-100)
-   - Format: {"x": left edge %, "y": top edge %, "width": box width %, "height": box height %}
-   - Be as accurate as possible to highlight the item text
-   - Example: {"x": 10, "y": 25, "width": 30, "height": 3} means item is 10% from left, 25% from top, 30% wide, 3% tall
+   - The Y coordinate should be the VERTICAL CENTER of the item text line
+   - Format: {"x": left edge %, "y": vertical center %, "width": box width %, "height": box height %}
+   - Make the height tall enough to fully cover the text line (usually 3-5%)
+   - Be precise with positioning - the box should fully encompass the item name
+   - Example: {"x": 10, "y": 25, "width": 30, "height": 4} means item is 10% from left, centered at 25% from top, 30% wide, 4% tall
 
 4. Classify items as:
    - "suitable" (4-5 stars)
@@ -163,9 +165,12 @@ Format your response as JSON with this structure:
       items.forEach(item => {
         if (item.bbox) {
           const x = (item.bbox.x / 100) * imageWidth;
-          const y = (item.bbox.y / 100) * imageHeight;
           const width = (item.bbox.width / 100) * imageWidth;
           const height = (item.bbox.height / 100) * imageHeight;
+
+          // Y coordinate is the center of the box, so subtract half the height
+          const centerY = (item.bbox.y / 100) * imageHeight;
+          const y = centerY - (height / 2);
 
           // Draw semi-transparent fill
           ctx.fillStyle = color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
