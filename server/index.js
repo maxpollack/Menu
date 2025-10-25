@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
-const sharp = require('sharp');
 const Anthropic = require('@anthropic-ai/sdk');
 require('dotenv').config();
 
@@ -15,10 +14,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Configure multer for memory storage
+// Client-side compression ensures images are under 4.5MB
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit (generous buffer for client-compressed images)
 });
 
 // Initialize Anthropic client
@@ -44,106 +44,22 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
       return res.status(400).json({ error: 'No dietary preferences provided' });
     }
 
-    // Resize image if needed to stay under Claude API's 5MB limit
-    // Target 4.8MB to have a safety margin (Claude limit is 5MB exactly)
-    let imageBuffer = req.file.buffer;
-    const MAX_SIZE = 4.8 * 1024 * 1024; // 4.8MB target (safety margin)
+    // Client-side compression ensures images are already under 4.5MB
+    const imageBuffer = req.file.buffer;
+    const imageSizeMB = imageBuffer.length / (1024 * 1024);
+
+    console.log(`[Server] Received image: ${imageSizeMB.toFixed(2)}MB (${imageBuffer.length} bytes)`);
+    console.log(`[Server] Image type: ${req.file.mimetype}`);
+
+    // Safety check - should never happen with client-side compression
     const CLAUDE_LIMIT = 5 * 1024 * 1024; // 5MB hard limit
-    let wasResized = false;
-
-    console.log(`[Image Processing] Original image size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (${imageBuffer.length} bytes)`);
-
-    if (imageBuffer.length > MAX_SIZE) {
-      console.log(`[Image Processing] Image exceeds 5MB limit, starting compression...`);
-      wasResized = true;
-
-      try {
-        // Get image metadata
-        const metadata = await sharp(req.file.buffer).metadata();
-        console.log(`[Image Processing] Original dimensions: ${metadata.width}x${metadata.height}, format: ${metadata.format}`);
-
-        // Start with aggressive compression - combine quality and dimension reduction
-        let compressed = false;
-        let finalQuality = 80;
-        let finalScale = 1.0;
-
-        // Try progressively smaller sizes until we get under 4.8MB
-        const attempts = [
-          { scale: 1.0, quality: 75 },
-          { scale: 1.0, quality: 65 },
-          { scale: 1.0, quality: 55 },
-          { scale: 0.9, quality: 65 },
-          { scale: 0.8, quality: 65 },
-          { scale: 0.7, quality: 65 },
-          { scale: 0.6, quality: 60 },
-          { scale: 0.5, quality: 55 },
-          { scale: 0.4, quality: 50 },
-          { scale: 0.3, quality: 45 },
-        ];
-
-        for (const attempt of attempts) {
-          const newWidth = Math.round(metadata.width * attempt.scale);
-          const newHeight = Math.round(metadata.height * attempt.scale);
-
-          console.log(`[Image Processing] Trying scale=${(attempt.scale * 100).toFixed(0)}%, quality=${attempt.quality}, dimensions=${newWidth}x${newHeight}`);
-
-          const testBuffer = await sharp(req.file.buffer)
-            .resize(newWidth, newHeight, {
-              fit: 'inside',
-              withoutEnlargement: true
-            })
-            .jpeg({ quality: attempt.quality, mozjpeg: true })
-            .toBuffer();
-
-          const sizeMB = testBuffer.length / 1024 / 1024;
-          console.log(`[Image Processing] Result: ${sizeMB.toFixed(2)}MB`);
-
-          if (testBuffer.length <= MAX_SIZE) {
-            imageBuffer = testBuffer;
-            finalQuality = attempt.quality;
-            finalScale = attempt.scale;
-            compressed = true;
-            console.log(`[Image Processing] ✓ Successfully compressed to ${sizeMB.toFixed(2)}MB`);
-            break;
-          }
-        }
-
-        if (!compressed) {
-          // Last resort: very aggressive compression
-          console.log(`[Image Processing] Standard attempts failed, using maximum compression...`);
-          imageBuffer = await sharp(req.file.buffer)
-            .resize(Math.round(metadata.width * 0.25), Math.round(metadata.height * 0.25), {
-              fit: 'inside'
-            })
-            .jpeg({ quality: 35, mozjpeg: true })
-            .toBuffer();
-
-          const finalSizeMB = imageBuffer.length / 1024 / 1024;
-          console.log(`[Image Processing] Maximum compression result: ${finalSizeMB.toFixed(2)}MB (${imageBuffer.length} bytes)`);
-
-          if (imageBuffer.length > MAX_SIZE) {
-            throw new Error(`Unable to compress image below 4.8MB even with maximum compression. Final size: ${finalSizeMB.toFixed(2)}MB`);
-          }
-        }
-
-        console.log(`[Image Processing] Final image: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (${imageBuffer.length} bytes)`);
-
-        // CRITICAL: Final safety check before sending to Claude
-        if (imageBuffer.length > CLAUDE_LIMIT) {
-          throw new Error(`CRITICAL: Image is still ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB after compression, exceeds Claude's 5MB limit!`);
-        }
-
-      } catch (error) {
-        console.error(`[Image Processing] Error during compression:`, error);
-        throw error;
-      }
-    } else {
-      console.log(`[Image Processing] Image is under 4.8MB, no resizing needed`);
+    if (imageBuffer.length > CLAUDE_LIMIT) {
+      throw new Error(`Image is ${imageSizeMB.toFixed(2)}MB, exceeds Claude's 5MB limit. Client-side compression may have failed.`);
     }
 
     // Convert image buffer to base64
     const base64Image = imageBuffer.toString('base64');
-    const mediaType = wasResized ? 'image/jpeg' : req.file.mimetype;
+    const mediaType = req.file.mimetype;
 
     // Build learned preferences context
     let learnedContext = '';
@@ -196,11 +112,10 @@ Format your response as JSON with this structure:
   ]
 }`;
 
-    // CRITICAL: Log final image details before sending to Claude
+    // Log image details before sending to Claude
     console.log(`[Claude API] Sending image to Claude API:`);
-    console.log(`[Claude API]   - Size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (${imageBuffer.length} bytes)`);
+    console.log(`[Claude API]   - Size: ${imageSizeMB.toFixed(2)}MB (${imageBuffer.length} bytes)`);
     console.log(`[Claude API]   - Media type: ${mediaType}`);
-    console.log(`[Claude API]   - Was resized: ${wasResized}`);
     console.log(`[Claude API]   - Base64 length: ${base64Image.length} characters`);
 
     // Call Claude API with vision
