@@ -1,25 +1,9 @@
 const CACHE_NAME = 'menu-analyzer-v1';
-const urlsToCache = [
-  '/',
-  '/static/css/main.css',
-  '/static/js/main.js',
-  '/manifest.json'
-];
 
 // Install event - cache essential resources
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        // Don't fail if some resources can't be cached
-        return Promise.allSettled(
-          urlsToCache.map(url =>
-            cache.add(url).catch(err => console.log('Failed to cache:', url))
-          )
-        );
-      })
-  );
+  console.log('Service Worker installing...');
+  // Skip waiting to activate immediately
   self.skipWaiting();
 });
 
@@ -42,13 +26,14 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache when offline, network first for API calls
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
+  // Skip cross-origin requests and non-http requests
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || !url.protocol.startsWith('http')) {
     return;
   }
 
   // Network first for API calls
-  if (event.request.url.includes('/api/')) {
+  if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
         .catch(() => {
@@ -64,30 +49,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache first for static resources
+  // Network first with cache fallback for other requests
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then((response) => {
-        if (response) {
+        // Don't cache if not a valid response
+        if (!response || response.status !== 200 || response.type === 'error') {
           return response;
         }
 
-        return fetch(event.request).then((response) => {
-          // Don't cache if not a valid response
-          if (!response || response.status !== 200 || response.type === 'error') {
-            return response;
-          }
-
-          // Clone the response
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
+        // Clone and cache the response for future offline use
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME)
+          .then((cache) => {
+            cache.put(event.request, responseToCache).catch(() => {
+              // Silently fail if caching fails
             });
+          });
 
-          return response;
-        });
+        return response;
+      })
+      .catch(() => {
+        // If network fails, try cache
+        return caches.match(event.request);
       })
   );
 });
