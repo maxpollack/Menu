@@ -254,11 +254,6 @@ function App() {
 
   return (
     <div className="App">
-      <header className="app-header">
-        <h1>Diet Menu Analyzer</h1>
-        <p>AI-powered menu analysis for your dietary needs</p>
-      </header>
-
       <main className="app-main">
         {!analysis ? (
           <div className="input-section">
@@ -618,10 +613,6 @@ function App() {
           </div>
         )}
       </main>
-
-      <footer className="app-footer">
-        <p>Powered by Claude AI Vision</p>
-      </footer>
     </div>
   );
 }
