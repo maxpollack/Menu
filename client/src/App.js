@@ -297,13 +297,18 @@ function App() {
               <label htmlFor="menu-upload">
                 Upload Menu Photo
               </label>
-              <input
-                id="menu-upload"
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                capture="environment"
-              />
+              <div className="file-upload-wrapper">
+                <label htmlFor="menu-upload" className="file-upload-button">
+                  {menuImage ? '📷 Change Photo' : '📷 Choose Photo or Take Picture'}
+                </label>
+                <input
+                  id="menu-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{ display: 'none' }}
+                />
+              </div>
 
               {imagePreview && (
                 <div className="image-preview">
@@ -311,6 +316,23 @@ function App() {
                 </div>
               )}
             </div>
+
+            {/* Status message */}
+            {!menuImage && selectedPreferences.length > 0 && (
+              <div className="status-message">
+                📸 Upload a menu photo to continue
+              </div>
+            )}
+            {menuImage && selectedPreferences.length === 0 && (
+              <div className="status-message">
+                ✅ Photo uploaded! Now select your dietary preferences
+              </div>
+            )}
+            {menuImage && selectedPreferences.length > 0 && !error && (
+              <div className="status-message success">
+                ✅ Ready to analyze! ({selectedPreferences.length} preference{selectedPreferences.length !== 1 ? 's' : ''} selected)
+              </div>
+            )}
 
             {error && (
               <div className="error-message">
