@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
@@ -8,6 +8,21 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Load dietary preferences from localStorage on mount
+  useEffect(() => {
+    const savedPreferences = localStorage.getItem('dietaryPreferences');
+    if (savedPreferences) {
+      setDietaryPreferences(savedPreferences);
+    }
+  }, []);
+
+  // Save dietary preferences to localStorage whenever they change
+  useEffect(() => {
+    if (dietaryPreferences) {
+      localStorage.setItem('dietaryPreferences', dietaryPreferences);
+    }
+  }, [dietaryPreferences]);
 
   // Common dietary preference suggestions
   const preferenceSuggestions = [
@@ -107,11 +122,16 @@ function App() {
   };
 
   const reset = () => {
-    setDietaryPreferences('');
+    // Keep dietary preferences saved
     setMenuImage(null);
     setImagePreview(null);
     setAnalysis(null);
     setError(null);
+  };
+
+  const clearPreferences = () => {
+    setDietaryPreferences('');
+    localStorage.removeItem('dietaryPreferences');
   };
 
   return (
@@ -126,9 +146,21 @@ function App() {
           <div className="input-section">
             {/* Dietary Preferences Section */}
             <div className="form-group">
-              <label htmlFor="dietary-prefs">
-                Your Dietary Preferences
-              </label>
+              <div className="label-with-clear">
+                <label htmlFor="dietary-prefs">
+                  Your Dietary Preferences
+                </label>
+                {dietaryPreferences && (
+                  <button
+                    type="button"
+                    className="clear-prefs-button"
+                    onClick={clearPreferences}
+                    title="Clear saved preferences"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <textarea
                 id="dietary-prefs"
                 placeholder="e.g., Vegetarian, gluten-free, no dairy..."
