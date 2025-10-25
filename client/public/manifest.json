@@ -1,0 +1,24 @@
+{
+  "short_name": "Menu Analyzer",
+  "name": "Diet Menu Analyzer",
+  "description": "AI-powered menu analyzer for your dietary preferences",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#667eea",
+  "background_color": "#667eea",
+  "orientation": "portrait"
+}
