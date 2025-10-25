@@ -51,9 +51,14 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
     if (imageBuffer.length > MAX_SIZE) {
       console.log(`Image size ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds 5MB limit, resizing...`);
 
-      // Resize image progressively until under 5MB
+      // Get image metadata to determine dimensions
+      const metadata = await sharp(req.file.buffer).metadata();
+      const originalWidth = metadata.width;
+      const originalHeight = metadata.height;
+
+      // Try quality reduction first (on full-size image)
       let quality = 85;
-      while (imageBuffer.length > MAX_SIZE && quality > 10) {
+      while (imageBuffer.length > MAX_SIZE && quality > 20) {
         imageBuffer = await sharp(req.file.buffer)
           .jpeg({ quality, mozjpeg: true })
           .toBuffer();
@@ -63,7 +68,21 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
         }
       }
 
-      console.log(`Image resized to ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB with quality ${quality}`);
+      // If quality reduction isn't enough, reduce dimensions
+      let scale = 0.9;
+      while (imageBuffer.length > MAX_SIZE && scale > 0.3) {
+        imageBuffer = await sharp(req.file.buffer)
+          .resize(Math.round(originalWidth * scale), Math.round(originalHeight * scale))
+          .jpeg({ quality: 75, mozjpeg: true })
+          .toBuffer();
+
+        if (imageBuffer.length > MAX_SIZE) {
+          scale -= 0.1;
+        }
+      }
+
+      const finalScale = imageBuffer.length > MAX_SIZE ? scale : (quality < 85 ? 1.0 : scale);
+      console.log(`Image resized to ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (quality: ${quality}, scale: ${(finalScale * 100).toFixed(0)}%)`);
     }
 
     // Convert image buffer to base64
