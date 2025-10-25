@@ -8,6 +8,7 @@ function App() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
   const [customPreferences, setCustomPreferences] = useState([]);
   const [newPreference, setNewPreference] = useState('');
   const [likedItems, setLikedItems] = useState([]);
@@ -78,23 +79,98 @@ function App() {
   // Combine default and custom preferences
   const preferenceSuggestions = [...defaultPreferenceSuggestions, ...customPreferences];
 
-  const handleImageChange = (e) => {
+  // Resize image if it exceeds 5MB
+  const resizeImage = (file, maxSizeMB = 5) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          let quality = 0.9;
+
+          // Calculate the scale to reduce file size
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          // Start with original size
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Function to compress until under target size
+          const compress = (currentQuality, currentScale = 1) => {
+            canvas.width = width * currentScale;
+            canvas.height = height * currentScale;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+              const sizeMB = blob.size / (1024 * 1024);
+
+              if (sizeMB <= maxSizeMB || currentQuality <= 0.1) {
+                // Convert blob to file
+                const resizedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve(resizedFile);
+              } else if (sizeMB > maxSizeMB * 2) {
+                // If still way too large, reduce dimensions
+                compress(currentQuality, currentScale * 0.8);
+              } else {
+                // Just reduce quality
+                compress(currentQuality - 0.1, currentScale);
+              }
+            }, 'image/jpeg', currentQuality);
+          };
+
+          compress(quality);
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target.result;
+      };
+
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setError('Image size must be less than 10MB');
-        return;
+      try {
+        const maxSizeMB = 5;
+        const fileSizeMB = file.size / (1024 * 1024);
+
+        let processedFile = file;
+
+        // Resize if over 5MB
+        if (fileSizeMB > maxSizeMB) {
+          setStatusMessage(`Resizing image (${fileSizeMB.toFixed(1)}MB → ${maxSizeMB}MB)...`);
+          processedFile = await resizeImage(file, maxSizeMB);
+          const newSizeMB = processedFile.size / (1024 * 1024);
+          console.log(`Image resized from ${fileSizeMB.toFixed(1)}MB to ${newSizeMB.toFixed(1)}MB`);
+          setStatusMessage(`Image resized to ${newSizeMB.toFixed(1)}MB`);
+          setTimeout(() => setStatusMessage(null), 3000);
+        }
+
+        setMenuImage(processedFile);
+        setError(null);
+
+        // Create preview
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result);
+        };
+        reader.readAsDataURL(processedFile);
+      } catch (err) {
+        setError('Failed to process image. Please try another image.');
+        setStatusMessage(null);
+        console.error('Image processing error:', err);
       }
-
-      setMenuImage(file);
-      setError(null);
-
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -381,6 +457,12 @@ function App() {
             {menuImage && selectedPreferences.length > 0 && !error && (
               <div className="status-message success">
                 ✅ Ready to analyze! ({selectedPreferences.length} preference{selectedPreferences.length !== 1 ? 's' : ''} selected)
+              </div>
+            )}
+
+            {statusMessage && (
+              <div className="status-message">
+                {statusMessage}
               </div>
             )}
 
