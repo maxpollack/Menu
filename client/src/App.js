@@ -87,46 +87,61 @@ function App() {
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-          let quality = 0.9;
+          // Calculate initial scale based on file size
+          const fileSizeMB = file.size / (1024 * 1024);
+          let scale = 1;
 
-          // Calculate the scale to reduce file size
+          // Aggressively scale down for large images
+          if (fileSizeMB > 15) {
+            scale = 0.5;
+          } else if (fileSizeMB > 10) {
+            scale = 0.6;
+          } else if (fileSizeMB > 7) {
+            scale = 0.7;
+          } else {
+            scale = 0.85;
+          }
+
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
 
-          // Start with original size
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
+          // Set canvas size with initial scale
+          canvas.width = Math.floor(img.width * scale);
+          canvas.height = Math.floor(img.height * scale);
 
-          // Function to compress until under target size
-          const compress = (currentQuality, currentScale = 1) => {
-            canvas.width = width * currentScale;
-            canvas.height = height * currentScale;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          // Draw scaled image
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            canvas.toBlob((blob) => {
-              const sizeMB = blob.size / (1024 * 1024);
+          // Try different quality levels until we get under maxSizeMB
+          const tryCompress = (quality) => {
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  reject(new Error('Failed to create blob'));
+                  return;
+                }
 
-              if (sizeMB <= maxSizeMB || currentQuality <= 0.1) {
-                // Convert blob to file
-                const resizedFile = new File([blob], file.name, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now()
-                });
-                resolve(resizedFile);
-              } else if (sizeMB > maxSizeMB * 2) {
-                // If still way too large, reduce dimensions
-                compress(currentQuality, currentScale * 0.8);
-              } else {
-                // Just reduce quality
-                compress(currentQuality - 0.1, currentScale);
-              }
-            }, 'image/jpeg', currentQuality);
+                const sizeMB = blob.size / (1024 * 1024);
+
+                // If we're under the limit or quality is too low, use this version
+                if (sizeMB <= maxSizeMB || quality <= 0.1) {
+                  const resizedFile = new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now()
+                  });
+                  resolve(resizedFile);
+                } else {
+                  // Try lower quality
+                  tryCompress(quality - 0.1);
+                }
+              },
+              'image/jpeg',
+              quality
+            );
           };
 
-          compress(quality);
+          // Start with quality 0.85 for good balance
+          tryCompress(0.85);
         };
 
         img.onerror = () => reject(new Error('Failed to load image'));
