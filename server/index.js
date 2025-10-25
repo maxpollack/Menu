@@ -70,7 +70,7 @@ Format your response as JSON with this structure:
 
     // Call Claude API with vision
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-5-sonnet-20240620',
       max_tokens: 2048,
       messages: [
         {
