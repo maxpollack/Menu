@@ -49,58 +49,87 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
     const MAX_SIZE = 5 * 1024 * 1024; // 5MB in bytes
     let wasResized = false;
 
+    console.log(`[Image Processing] Original image size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+
     if (imageBuffer.length > MAX_SIZE) {
-      console.log(`Image size ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds 5MB limit, resizing...`);
+      console.log(`[Image Processing] Image exceeds 5MB limit, starting compression...`);
       wasResized = true;
 
-      // Get image metadata
-      const metadata = await sharp(req.file.buffer).metadata();
-      const originalWidth = metadata.width;
-      const originalHeight = metadata.height;
+      try {
+        // Get image metadata
+        const metadata = await sharp(req.file.buffer).metadata();
+        console.log(`[Image Processing] Original dimensions: ${metadata.width}x${metadata.height}, format: ${metadata.format}`);
 
-      // Strategy: Try quality reduction first, then combine dimension + quality reduction
-      let quality = 85;
-      let scale = 1.0;
+        // Start with aggressive compression - combine quality and dimension reduction
+        let compressed = false;
+        let finalQuality = 80;
+        let finalScale = 1.0;
 
-      // Attempt 1: Quality reduction only (keep full dimensions)
-      for (let q = 85; q >= 20; q -= 5) {
-        const testBuffer = await sharp(req.file.buffer)
-          .jpeg({ quality: q, mozjpeg: true })
-          .toBuffer();
+        // Try progressively smaller sizes until we get under 5MB
+        const attempts = [
+          { scale: 1.0, quality: 80 },
+          { scale: 1.0, quality: 70 },
+          { scale: 1.0, quality: 60 },
+          { scale: 0.9, quality: 70 },
+          { scale: 0.8, quality: 70 },
+          { scale: 0.7, quality: 70 },
+          { scale: 0.6, quality: 60 },
+          { scale: 0.5, quality: 60 },
+          { scale: 0.4, quality: 50 },
+        ];
 
-        if (testBuffer.length <= MAX_SIZE) {
-          imageBuffer = testBuffer;
-          quality = q;
-          break;
-        }
-      }
+        for (const attempt of attempts) {
+          const newWidth = Math.round(metadata.width * attempt.scale);
+          const newHeight = Math.round(metadata.height * attempt.scale);
 
-      // Attempt 2: If quality reduction alone didn't work, reduce dimensions with good quality
-      if (imageBuffer.length > MAX_SIZE) {
-        for (let s = 0.9; s >= 0.3; s -= 0.1) {
+          console.log(`[Image Processing] Trying scale=${(attempt.scale * 100).toFixed(0)}%, quality=${attempt.quality}, dimensions=${newWidth}x${newHeight}`);
+
           const testBuffer = await sharp(req.file.buffer)
-            .resize(Math.round(originalWidth * s), Math.round(originalHeight * s), {
+            .resize(newWidth, newHeight, {
               fit: 'inside',
               withoutEnlargement: true
             })
-            .jpeg({ quality: 75, mozjpeg: true })
+            .jpeg({ quality: attempt.quality, mozjpeg: true })
             .toBuffer();
+
+          const sizeMB = testBuffer.length / 1024 / 1024;
+          console.log(`[Image Processing] Result: ${sizeMB.toFixed(2)}MB`);
 
           if (testBuffer.length <= MAX_SIZE) {
             imageBuffer = testBuffer;
-            scale = s;
-            quality = 75;
+            finalQuality = attempt.quality;
+            finalScale = attempt.scale;
+            compressed = true;
+            console.log(`[Image Processing] ✓ Successfully compressed to ${sizeMB.toFixed(2)}MB`);
             break;
           }
         }
-      }
 
-      console.log(`Image resized to ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB (quality: ${quality}, scale: ${(scale * 100).toFixed(0)}%)`);
+        if (!compressed) {
+          // Last resort: very aggressive compression
+          console.log(`[Image Processing] Standard attempts failed, using maximum compression...`);
+          imageBuffer = await sharp(req.file.buffer)
+            .resize(Math.round(metadata.width * 0.3), Math.round(metadata.height * 0.3), {
+              fit: 'inside'
+            })
+            .jpeg({ quality: 40, mozjpeg: true })
+            .toBuffer();
 
-      // Final check - if still too large, throw error
-      if (imageBuffer.length > MAX_SIZE) {
-        throw new Error(`Unable to compress image below 5MB limit. Final size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+          const finalSizeMB = imageBuffer.length / 1024 / 1024;
+          console.log(`[Image Processing] Maximum compression result: ${finalSizeMB.toFixed(2)}MB`);
+
+          if (imageBuffer.length > MAX_SIZE) {
+            throw new Error(`Unable to compress image below 5MB even with maximum compression. Final size: ${finalSizeMB.toFixed(2)}MB`);
+          }
+        }
+
+        console.log(`[Image Processing] Final image: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+      } catch (error) {
+        console.error(`[Image Processing] Error during compression:`, error);
+        throw error;
       }
+    } else {
+      console.log(`[Image Processing] Image is under 5MB, no resizing needed`);
     }
 
     // Convert image buffer to base64
