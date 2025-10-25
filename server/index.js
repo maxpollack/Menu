@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const { createCanvas, loadImage } = require('canvas');
 const Anthropic = require('@anthropic-ai/sdk');
 require('dotenv').config();
 
@@ -47,8 +48,13 @@ app.post('/api/analyze-menu', upload.single('menu'), async (req, res) => {
     const base64Image = req.file.buffer.toString('base64');
     const mediaType = req.file.mimetype;
 
+    // Get image dimensions first
+    const tempImage = await loadImage(req.file.buffer);
+    const imageWidth = tempImage.width;
+    const imageHeight = tempImage.height;
+
     // Create prompt for Claude
-    const prompt = `Analyze this restaurant menu image based on the following dietary preferences: ${dietaryPreferences}
+    const prompt = `Analyze this restaurant menu image (${imageWidth}x${imageHeight} pixels) based on the following dietary preferences: ${dietaryPreferences}
 
 Please provide:
 1. A brief text summary (2-3 sentences) of the overall menu compatibility
@@ -59,7 +65,11 @@ Please provide:
    - 2 stars: Poor match, conflicts with some preferences
    - 1 star: Very poor match, should avoid
 
-3. For each item, provide a simple location description (e.g., "Top of menu", "Middle section", "Bottom right", "Under Appetizers section")
+3. For each item, estimate a bounding box where the item name appears on the menu:
+   - Provide coordinates as percentages of image dimensions (0-100)
+   - Format: {"x": left edge %, "y": top edge %, "width": box width %, "height": box height %}
+   - Be as accurate as possible to highlight the item text
+   - Example: {"x": 10, "y": 25, "width": 30, "height": 3} means item is 10% from left, 25% from top, 30% wide, 3% tall
 
 4. Classify items as:
    - "suitable" (4-5 stars)
@@ -71,13 +81,13 @@ Format your response as JSON with this structure:
   "summary": "Brief 2-3 sentence analysis of the menu compatibility",
   "overallCompatibility": 3.5,
   "suitableItems": [
-    {"name": "item name", "rating": 5, "reason": "why it's suitable", "location": "where it appears on the menu"}
+    {"name": "item name", "rating": 5, "reason": "why it's suitable", "location": "text description", "bbox": {"x": 10, "y": 25, "width": 30, "height": 3}}
   ],
   "neutralItems": [
-    {"name": "item name", "rating": 3, "reason": "why it's neutral", "location": "where it appears on the menu"}
+    {"name": "item name", "rating": 3, "reason": "why it's neutral", "location": "text description", "bbox": {"x": 10, "y": 45, "width": 30, "height": 3}}
   ],
   "unsuitableItems": [
-    {"name": "item name", "rating": 1, "reason": "why it's unsuitable", "location": "where it appears on the menu"}
+    {"name": "item name", "rating": 1, "reason": "why it's unsuitable", "location": "text description", "bbox": {"x": 10, "y": 65, "width": 30, "height": 3}}
   ],
   "recommendations": [
     {"name": "item name", "rating": 5, "reason": "why recommended"}
@@ -141,10 +151,47 @@ Format your response as JSON with this structure:
       };
     }
 
+    // Create highlighted image
+    const canvas = createCanvas(imageWidth, imageHeight);
+    const ctx = canvas.getContext('2d');
+
+    // Draw original image
+    ctx.drawImage(tempImage, 0, 0);
+
+    // Draw highlights for each item
+    const drawHighlights = (items, color, alpha = 0.3) => {
+      items.forEach(item => {
+        if (item.bbox) {
+          const x = (item.bbox.x / 100) * imageWidth;
+          const y = (item.bbox.y / 100) * imageHeight;
+          const width = (item.bbox.width / 100) * imageWidth;
+          const height = (item.bbox.height / 100) * imageHeight;
+
+          // Draw semi-transparent fill
+          ctx.fillStyle = color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+          ctx.fillRect(x, y, width, height);
+
+          // Draw solid border
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, width, height);
+        }
+      });
+    };
+
+    // Draw highlights with colors
+    drawHighlights(analysis.suitableItems || [], 'rgb(16, 185, 129)', 0.25);    // Green
+    drawHighlights(analysis.neutralItems || [], 'rgb(245, 158, 11)', 0.25);     // Yellow
+    drawHighlights(analysis.unsuitableItems || [], 'rgb(239, 68, 68)', 0.25);   // Red
+
+    // Convert canvas to base64
+    const highlightedImage = canvas.toDataURL('image/jpeg', 0.92);
+
     res.json({
       success: true,
       analysis: analysis,
-      originalImage: `data:${mediaType};base64,${base64Image}`
+      originalImage: `data:${mediaType};base64,${base64Image}`,
+      highlightedImage: highlightedImage
     });
 
   } catch (error) {

@@ -5,6 +5,7 @@ function App() {
   const [selectedPreferences, setSelectedPreferences] = useState([]);
   const [menuImage, setMenuImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [highlightedImage, setHighlightedImage] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -117,6 +118,9 @@ function App() {
 
       const data = await response.json();
       setAnalysis(data.analysis);
+      if (data.highlightedImage) {
+        setHighlightedImage(data.highlightedImage);
+      }
     } catch (err) {
       setError(err.message || 'Failed to analyze menu. Please try again.');
       console.error('Error:', err);
@@ -129,6 +133,7 @@ function App() {
     // Keep dietary preferences saved
     setMenuImage(null);
     setImagePreview(null);
+    setHighlightedImage(null);
     setAnalysis(null);
     setError(null);
   };
@@ -167,13 +172,15 @@ function App() {
   };
 
   const renderAnnotatedMenu = () => {
-    if (!imagePreview) return null;
+    // Use highlighted image if available, otherwise fall back to original
+    const displayImage = highlightedImage || imagePreview;
+    if (!displayImage) return null;
 
     return (
       <div className="annotated-menu-container">
-        <h3>Your Menu</h3>
+        <h3>Your Menu {highlightedImage && '(Highlighted)'}</h3>
         <div className="annotated-menu-wrapper">
-          <img src={imagePreview} alt="Analyzed menu" className="menu-base-image" />
+          <img src={displayImage} alt="Analyzed menu" className="menu-base-image" />
         </div>
         <div className="highlight-legend">
           <p className="legend-title">Color Guide:</p>
