@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
-  const [dietaryPreferences, setDietaryPreferences] = useState('');
+  const [selectedPreferences, setSelectedPreferences] = useState([]);
   const [menuImage, setMenuImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -25,25 +25,23 @@ function App() {
     'Shellfish-free'
   ];
 
-  // Load dietary preferences and custom preferences from localStorage on mount
+  // Load selected preferences and custom preferences from localStorage on mount
   useEffect(() => {
-    const savedPreferences = localStorage.getItem('dietaryPreferences');
+    const savedPreferences = localStorage.getItem('selectedPreferences');
     const savedCustomPreferences = localStorage.getItem('customPreferences');
 
     if (savedPreferences) {
-      setDietaryPreferences(savedPreferences);
+      setSelectedPreferences(JSON.parse(savedPreferences));
     }
     if (savedCustomPreferences) {
       setCustomPreferences(JSON.parse(savedCustomPreferences));
     }
   }, []);
 
-  // Save dietary preferences to localStorage whenever they change
+  // Save selected preferences to localStorage whenever they change
   useEffect(() => {
-    if (dietaryPreferences) {
-      localStorage.setItem('dietaryPreferences', dietaryPreferences);
-    }
-  }, [dietaryPreferences]);
+    localStorage.setItem('selectedPreferences', JSON.stringify(selectedPreferences));
+  }, [selectedPreferences]);
 
   // Save custom preferences to localStorage whenever they change
   useEffect(() => {
@@ -74,21 +72,12 @@ function App() {
   };
 
   const handlePreferenceClick = (preference) => {
-    if (dietaryPreferences.includes(preference)) {
+    if (selectedPreferences.includes(preference)) {
       // Remove if already selected
-      setDietaryPreferences(
-        dietaryPreferences
-          .split(',')
-          .map(p => p.trim())
-          .filter(p => p !== preference)
-          .join(', ')
-      );
+      setSelectedPreferences(selectedPreferences.filter(p => p !== preference));
     } else {
       // Add preference
-      const current = dietaryPreferences.trim();
-      setDietaryPreferences(
-        current ? `${current}, ${preference}` : preference
-      );
+      setSelectedPreferences([...selectedPreferences, preference]);
     }
   };
 
@@ -98,8 +87,8 @@ function App() {
       return;
     }
 
-    if (!dietaryPreferences.trim()) {
-      setError('Please enter your dietary preferences');
+    if (selectedPreferences.length === 0) {
+      setError('Please select at least one dietary preference');
       return;
     }
 
@@ -110,7 +99,7 @@ function App() {
     try {
       const formData = new FormData();
       formData.append('menu', menuImage);
-      formData.append('dietaryPreferences', dietaryPreferences);
+      formData.append('dietaryPreferences', selectedPreferences.join(', '));
 
       const apiUrl = process.env.NODE_ENV === 'production'
         ? '/api/analyze-menu'
@@ -145,8 +134,8 @@ function App() {
   };
 
   const clearPreferences = () => {
-    setDietaryPreferences('');
-    localStorage.removeItem('dietaryPreferences');
+    setSelectedPreferences([]);
+    localStorage.removeItem('selectedPreferences');
   };
 
   const addCustomPreference = () => {
@@ -154,22 +143,15 @@ function App() {
     if (trimmed && !preferenceSuggestions.includes(trimmed)) {
       setCustomPreferences([...customPreferences, trimmed]);
       setNewPreference('');
-      // Also add to active preferences
-      const current = dietaryPreferences.trim();
-      setDietaryPreferences(current ? `${current}, ${trimmed}` : trimmed);
+      // Also add to selected preferences
+      setSelectedPreferences([...selectedPreferences, trimmed]);
     }
   };
 
   const removeCustomPreference = (pref) => {
     setCustomPreferences(customPreferences.filter(p => p !== pref));
-    // Also remove from active preferences
-    setDietaryPreferences(
-      dietaryPreferences
-        .split(',')
-        .map(p => p.trim())
-        .filter(p => p !== pref)
-        .join(', ')
-    );
+    // Also remove from selected preferences
+    setSelectedPreferences(selectedPreferences.filter(p => p !== pref));
   };
 
   const renderStars = (rating) => {
@@ -250,10 +232,10 @@ function App() {
             {/* Dietary Preferences Section */}
             <div className="form-group">
               <div className="label-with-clear">
-                <label htmlFor="dietary-prefs">
+                <label>
                   Your Dietary Preferences
                 </label>
-                {dietaryPreferences && (
+                {selectedPreferences.length > 0 && (
                   <button
                     type="button"
                     className="clear-prefs-button"
@@ -264,13 +246,6 @@ function App() {
                   </button>
                 )}
               </div>
-              <textarea
-                id="dietary-prefs"
-                placeholder="e.g., Vegetarian, gluten-free, no dairy..."
-                value={dietaryPreferences}
-                onChange={(e) => setDietaryPreferences(e.target.value)}
-                rows="3"
-              />
 
               <div className="preference-chips">
                 {preferenceSuggestions.map((pref) => {
@@ -279,7 +254,7 @@ function App() {
                     <button
                       key={pref}
                       type="button"
-                      className={`chip ${dietaryPreferences.includes(pref) ? 'active' : ''} ${isCustom ? 'custom' : ''}`}
+                      className={`chip ${selectedPreferences.includes(pref) ? 'active' : ''} ${isCustom ? 'custom' : ''}`}
                       onClick={() => handlePreferenceClick(pref)}
                     >
                       {pref}
@@ -346,7 +321,7 @@ function App() {
             <button
               className="analyze-button"
               onClick={analyzeMenu}
-              disabled={loading || !menuImage || !dietaryPreferences.trim()}
+              disabled={loading || !menuImage || selectedPreferences.length === 0}
             >
               {loading ? 'Analyzing...' : 'Analyze Menu'}
             </button>
