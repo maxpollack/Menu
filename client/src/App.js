@@ -184,6 +184,59 @@ function App() {
     return <div className="star-rating">{stars}</div>;
   };
 
+  const renderAnnotatedMenu = () => {
+    if (!imagePreview || !analysis) return null;
+
+    const allItems = [
+      ...(analysis.suitableItems || []).map(item => ({ ...item, color: '#10b981', type: 'suitable' })),
+      ...(analysis.neutralItems || []).map(item => ({ ...item, color: '#f59e0b', type: 'neutral' })),
+      ...(analysis.unsuitableItems || []).map(item => ({ ...item, color: '#ef4444', type: 'unsuitable' }))
+    ];
+
+    return (
+      <div className="annotated-menu-container">
+        <div className="annotated-menu-wrapper">
+          <img src={imagePreview} alt="Menu with highlights" className="menu-base-image" />
+          <div className="menu-overlays">
+            {allItems.map((item, index) => {
+              if (!item.position) return null;
+
+              const { x, y, width, height } = item.position;
+
+              return (
+                <div
+                  key={index}
+                  className={`menu-highlight ${item.type}`}
+                  style={{
+                    left: `${x}%`,
+                    top: `${y}%`,
+                    width: `${width}%`,
+                    height: `${height}%`
+                  }}
+                  title={`${item.name} - ${item.rating} stars`}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <div className="highlight-legend">
+          <div className="legend-item">
+            <span className="legend-color green"></span>
+            <span>Good Choices (4-5★)</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-color yellow"></span>
+            <span>Acceptable (3★)</span>
+          </div>
+          <div className="legend-item">
+            <span className="legend-color red"></span>
+            <span>Avoid (1-2★)</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -308,16 +361,14 @@ function App() {
                   {renderStars(Math.round(analysis.overallCompatibility))}
                   <span className="score-text">{analysis.overallCompatibility.toFixed(1)} / 5.0</span>
                 </div>
+                {analysis.summary && (
+                  <p className="analysis-summary">{analysis.summary}</p>
+                )}
               </div>
             )}
 
-            {/* Display uploaded image */}
-            {imagePreview && (
-              <div className="uploaded-menu">
-                <h3>Your Menu</h3>
-                <img src={imagePreview} alt="Uploaded menu" />
-              </div>
-            )}
+            {/* Display annotated menu with highlights */}
+            {renderAnnotatedMenu()}
 
             {/* Menu Sections Highlight */}
             {analysis.menuSections && analysis.menuSections.length > 0 && (
